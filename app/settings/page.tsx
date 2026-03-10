@@ -1,5 +1,5 @@
-"use client"
-
+import { redirect } from "next/navigation"
+import { getCurrentUser } from "@/lib/auth"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,12 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Activity, Camera, Bell, Shield, Database } from "lucide-react"
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const user = await getCurrentUser()
+  if (!user) {
+    redirect("/auth/login")
+  }
+
   return (
     <DashboardLayout breadcrumbs={[{ label: "Settings" }]}>
       <div className="space-y-6">

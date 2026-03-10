@@ -1,15 +1,21 @@
+import { redirect, notFound } from "next/navigation"
+import { getCurrentUser } from "@/lib/auth"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { PatientHeader } from "@/components/patients/patient-header"
 import { PatientHistory } from "@/components/patients/patient-history"
 import { PatientSeverityTrend } from "@/components/patients/patient-severity-trend"
 import { patients } from "@/lib/mock-data"
-import { notFound } from "next/navigation"
 
 interface PatientPageProps {
   params: Promise<{ id: string }>
 }
 
 export default async function PatientPage({ params }: PatientPageProps) {
+  const user = await getCurrentUser()
+  if (!user) {
+    redirect("/auth/login")
+  }
+
   const { id } = await params
   const patient = patients.find((p) => p.id === id)
 

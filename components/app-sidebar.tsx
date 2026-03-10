@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard,
   Users,
@@ -11,7 +11,9 @@ import {
   Settings,
   Activity,
   ChevronRight,
+  LogOut,
 } from "lucide-react"
+import { useState } from "react"
 
 import {
   Sidebar,
@@ -66,6 +68,20 @@ const systemNavItems = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await fetch("/api/auth/logout", { method: "POST" })
+      router.push("/auth/login")
+      router.refresh()
+    } catch (error) {
+      console.error("[v0] Logout error:", error)
+      setIsLoggingOut(false)
+    }
+  }
 
   return (
     <Sidebar collapsible="icon">
@@ -135,14 +151,24 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg">
               <Avatar className="size-8">
-                <AvatarImage src="/placeholder-avatar.jpg" alt="Dr. Smith" />
-                <AvatarFallback className="bg-primary/20 text-primary">DS</AvatarFallback>
+                <AvatarImage src="/placeholder-avatar.jpg" alt="Clinician" />
+                <AvatarFallback className="bg-primary/20 text-primary">CU</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">Dr. Sarah Smith</span>
-                <span className="truncate text-xs text-muted-foreground">Dermatologist</span>
+                <span className="truncate font-semibold">My Account</span>
+                <span className="truncate text-xs text-muted-foreground">Clinician</span>
               </div>
               <ChevronRight className="ml-auto size-4" />
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              onClick={handleLogout} 
+              disabled={isLoggingOut}
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+            >
+              <LogOut className="size-4" />
+              <span>{isLoggingOut ? "Logging out..." : "Logout"}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

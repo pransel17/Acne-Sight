@@ -1,9 +1,15 @@
+import { redirect } from "next/navigation"
+import { getCurrentUser } from "@/lib/auth"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { TreatmentRecommendations } from "@/components/treatments/treatment-recommendations"
 import { TreatmentGuidelines } from "@/components/treatments/treatment-guidelines"
 import { ContraindicationCheck } from "@/components/treatments/contraindication-check"
 
-export default function TreatmentsPage() {
+export default async function TreatmentsPage() {
+  const user = await getCurrentUser()
+  if (!user) {
+    redirect("/auth/login")
+  }
   return (
     <DashboardLayout breadcrumbs={[{ label: "Treatment Plans" }]}>
       <div className="space-y-6">
