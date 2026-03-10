@@ -1,10 +1,18 @@
+import { redirect } from "next/navigation"
+import { getCurrentUser } from "@/lib/auth"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { FileText, Download, Calendar, User, TrendingDown, Eye } from "lucide-react"
 
-const recentReports = [
+export default async function ReportsPage() {
+  const user = await getCurrentUser()
+  if (!user) {
+    redirect("/auth/login")
+  }
+
+  const recentReports = [
   {
     id: "RPT-2026-0234",
     patient: "Jane Doe",

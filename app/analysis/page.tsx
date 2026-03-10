@@ -1,7 +1,13 @@
+import { redirect } from "next/navigation"
+import { getCurrentUser } from "@/lib/auth"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { AnalysisWorkspace } from "@/components/analysis/analysis-workspace"
 
-export default function AnalysisPage() {
+export default async function AnalysisPage() {
+  const user = await getCurrentUser()
+  if (!user) {
+    redirect("/auth/login")
+  }
   return (
     <DashboardLayout breadcrumbs={[{ label: "Analysis" }]}>
       <div className="space-y-6">

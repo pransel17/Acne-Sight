@@ -1,8 +1,15 @@
+import { redirect } from "next/navigation"
+import { getCurrentUser } from "@/lib/auth"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { PatientsList } from "@/components/patients/patients-list"
 import { PatientFilters } from "@/components/patients/patient-filters"
 
-export default function PatientsPage() {
+export default async function PatientsPage() {
+  const user = await getCurrentUser()
+  if (!user) {
+    redirect("/auth/login")
+  }
+
   return (
     <DashboardLayout breadcrumbs={[{ label: "Patients" }]}>
       <div className="space-y-6">
