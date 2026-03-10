@@ -27,6 +27,9 @@ export async function createSession(
   ipAddress?: string,
   userAgent?: string
 ): Promise<string> {
+  if (!sql) {
+    throw new Error("Database not configured")
+  }
   const token = generateSessionToken()
   const expiresAt = new Date()
   expiresAt.setDate(expiresAt.getDate() + SESSION_DURATION_DAYS)

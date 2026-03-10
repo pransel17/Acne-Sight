@@ -5,6 +5,10 @@ import { getCurrentUser, logAudit } from "@/lib/auth"
 // GET /api/patients - List all patients
 export async function GET(request: NextRequest) {
   try {
+    if (!sql) {
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 })
+    }
+
     const user = await getCurrentUser()
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
