@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
+from database import db
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import jwt
@@ -15,6 +16,16 @@ app = FastAPI(
     description="Clinical Acne Detection System Backend",
     version="1.0.0"
 )
+
+@app.on_event("startup")
+async def startup_event():
+    print("Connecting to database...")
+    await db.connect()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    print("Disconnecting from database...")
+    await db.disconnect()
 
 # CORS configuration
 app.add_middleware(
