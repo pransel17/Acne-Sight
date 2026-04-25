@@ -37,7 +37,6 @@ export function LoginForm() {
 
       // Login successful - redirect to dashboard
       router.push("/")
-      router.refresh()
     } catch (err) {
       setError("An error occurred. Please try again.")
       console.error("[v0] Login error:", err)

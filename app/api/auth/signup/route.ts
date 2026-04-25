@@ -1,105 +1,48 @@
 import { NextRequest, NextResponse } from "next/server"
-import { sql } from "@/lib/db"
-import { hashPassword, createSession, logAudit } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    if (!sql) {
-      return NextResponse.json(
-        { error: "Database not configured" },
-        { status: 500 }
-      )
+    const rawBody = await request.json()
+
+    const pythonReadyBody = {
+
+      username: rawBody.username || rawBody.email.split('@')[0], 
+      email: rawBody.email,
+      password: rawBody.password,
+
+      first_name: rawBody.firstName || rawBody.first_name || "", 
+      last_name: rawBody.lastName || rawBody.last_name || ""
     }
 
-    const { firstName, lastName, email, password, role, licenseNumber } =
-      await request.json()
 
-    if (!firstName || !lastName || !email || !password || !role) {
-      return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
-      )
-    }
-
-    if (password.length < 8) {
-      return NextResponse.json(
-        { error: "Password must be at least 8 characters" },
-        { status: 400 }
-      )
-    }
-
-    // Check if user already exists
-    const existingUsers = await sql`
-      SELECT id FROM users WHERE email = ${email.toLowerCase()}
-    `
-
-    if (existingUsers.length > 0) {
-      return NextResponse.json(
-        { error: "Email already registered" },
-        { status: 409 }
-      )
-    }
-
-    // Hash password
-    const passwordHash = await hashPassword(password)
-
-    // Create user
-    const result = await sql`
-      INSERT INTO users (
-        email, password_hash, first_name, last_name, role, 
-        license_number, email_verified, is_active
-      )
-      VALUES (
-        ${email.toLowerCase()},
-        ${passwordHash},
-        ${firstName},
-        ${lastName},
-        ${role},
-        ${licenseNumber || null},
-        false,
-        true
-      )
-      RETURNING id, email, first_name, last_name, role
-    `
-
-    const newUser = result[0]
-
-    // Create session
-    await createSession(
-      newUser.id,
-      request.headers.get("x-forwarded-for") || request.ip,
-      request.headers.get("user-agent") || undefined
-    )
-
-    // Log signup
-    await logAudit(
-      newUser.id,
-      "SIGNUP",
-      "user",
-      newUser.id,
-      null,
-      { role: newUser.role, email: newUser.email },
-      request.headers.get("x-forwarded-for") || request.ip,
-      request.headers.get("user-agent") || undefined
-    )
-
-    return NextResponse.json(
-      {
-        message: "Account created successfully",
-        user: {
-          id: newUser.id,
-          email: newUser.email,
-          firstName: newUser.first_name,
-          lastName: newUser.last_name,
-          role: newUser.role,
-        },
+    const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/signup`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      { status: 201 }
-    )
+      body: JSON.stringify(pythonReadyBody),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      let errorMessage = "Failed to create account"
+      if (data.detail) {
+        if (Array.isArray(data.detail)) {
+          errorMessage = data.detail[0].msg
+        } else if (typeof data.detail === 'string') {
+          errorMessage = data.detail
+        }
+      }
+      return NextResponse.json({ error: errorMessage }, { status: response.status })
+    }
+
+    return NextResponse.json(data)
+
   } catch (error) {
-    console.error("[v0] Signup error:", error)
+    console.error("Connection to FastAPI failed during signup:", error)
     return NextResponse.json(
-      { error: "An error occurred during signup" },
+      { error: "Could not connect to the backend server." },
       { status: 500 }
     )
   }

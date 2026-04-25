@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 from database import db
-from datetime import date
+from datetime import date, datetime
 import uuid
 
 router = APIRouter()
@@ -24,7 +24,7 @@ class PatientUpdate(BaseModel):
     notes: str | None = None
 
 class PatientResponse(BaseModel):
-    id: str
+    id: uuid.UUID
     patient_number: str
     first_name: str
     last_name: str
@@ -32,7 +32,7 @@ class PatientResponse(BaseModel):
     email: str | None
     phone: str | None
     skin_type: str | None
-    created_at: str
+    created_at: datetime   
 
 @router.get("/", response_model=list[PatientResponse])
 async def list_patients(skip: int = Query(0), limit: int = Query(50)):
@@ -43,12 +43,13 @@ async def list_patients(skip: int = Query(0), limit: int = Query(50)):
         WHERE is_active = true ORDER BY created_at DESC LIMIT $1 OFFSET $2""",
         limit, skip
     )
-    return patients
+    # Convert list of Records to list of dicts
+    return [dict(p) for p in patients]
 
 @router.post("/", response_model=PatientResponse)
 async def create_patient(patient: PatientCreate):
     """Create new patient"""
-    patient_id = str(uuid.uuid4())
+    patient_id = uuid.uuid4()
     patient_number = f"PT-{uuid.uuid4().hex[:8].upper()}"
     
     await db.execute(
@@ -67,7 +68,8 @@ async def create_patient(patient: PatientCreate):
         patient_id
     )
     
-    return new_patient
+ 
+    return dict(new_patient)
 
 @router.get("/{patient_id}", response_model=PatientResponse)
 async def get_patient(patient_id: str):
@@ -81,12 +83,12 @@ async def get_patient(patient_id: str):
     if not patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     
-    return patient
+    
+    return dict(patient)
 
 @router.put("/{patient_id}", response_model=PatientResponse)
 async def update_patient(patient_id: str, patient: PatientUpdate):
     """Update patient"""
-    # Build dynamic update query
     updates = []
     values = []
     param_count = 1
@@ -127,7 +129,7 @@ async def update_patient(patient_id: str, patient: PatientUpdate):
     if not updated_patient:
         raise HTTPException(status_code=404, detail="Patient not found")
     
-    return updated_patient
+    return dict(updated_patient)
 
 @router.delete("/{patient_id}")
 async def delete_patient(patient_id: str):

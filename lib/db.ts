@@ -1,9 +1,10 @@
 import { neon } from "@neondatabase/serverless"
 
 // Create the SQL client - safely handle undefined DATABASE_URL at build time
-export const sql = process.env.DATABASE_URL 
-  ? neon(process.env.DATABASE_URL)
-  : null
+if (!process.env.DATABASE_URL) {
+  throw new Error("DATABASE_URL is not defined in your environment variables");
+}
+export const sql = neon(process.env.DATABASE_URL);
 
 // Type definitions for database entities
 export type UserRole = "admin" | "dermatologist" | "nurse" | "receptionist"
