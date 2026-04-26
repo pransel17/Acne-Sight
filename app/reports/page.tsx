@@ -8,67 +8,69 @@ import { FileText, Download, Calendar, User, TrendingDown, Eye } from "lucide-re
 
 export default async function ReportsPage() {
   const user = await getCurrentUser()
+  
   if (!user) {
     redirect("/auth/login")
   }
 
+  // 1. Define your data inside the function (or above it)
   const recentReports = [
-  {
-    id: "RPT-2026-0234",
-    patient: "Jane Doe",
-    patientId: "PT-2024-0847",
-    type: "Progress Report",
-    date: "2026-02-01",
-    status: "completed",
-  },
-  {
-    id: "RPT-2026-0233",
-    patient: "John Smith",
-    patientId: "PT-2024-0923",
-    type: "Initial Assessment",
-    date: "2026-01-28",
-    status: "completed",
-  },
-  {
-    id: "RPT-2026-0232",
-    patient: "Emily Chen",
-    patientId: "PT-2024-1102",
-    type: "Treatment Evaluation",
-    date: "2026-01-25",
-    status: "completed",
-  },
-  {
-    id: "RPT-2026-0231",
-    patient: "Michael Brown",
-    patientId: "PT-2024-1205",
-    type: "Progress Report",
-    date: "2026-01-22",
-    status: "completed",
-  },
-]
+    {
+      id: "RPT-2026-0234",
+      patient: "Jane Doe",
+      patientId: "PT-2024-0847",
+      type: "Progress Report",
+      date: "2026-02-01",
+      status: "completed",
+    },
+    {
+      id: "RPT-2026-0233",
+      patient: "John Smith",
+      patientId: "PT-2024-0923",
+      type: "Initial Assessment",
+      date: "2026-01-28",
+      status: "completed",
+    },
+    {
+      id: "RPT-2026-0232",
+      patient: "Emily Chen",
+      patientId: "PT-2024-1102",
+      type: "Treatment Evaluation",
+      date: "2026-01-25",
+      status: "completed",
+    },
+    {
+      id: "RPT-2026-0231",
+      patient: "Michael Brown",
+      patientId: "PT-2024-1205",
+      type: "Progress Report",
+      date: "2026-01-22",
+      status: "completed",
+    },
+  ]
 
-const reportTemplates = [
-  {
-    id: "t1",
-    name: "Initial Assessment",
-    description: "Comprehensive baseline assessment for new patients",
-    icon: User,
-  },
-  {
-    id: "t2",
-    name: "Progress Report",
-    description: "Treatment progress and severity comparison",
-    icon: TrendingDown,
-  },
-  {
-    id: "t3",
-    name: "Treatment Summary",
-    description: "Complete treatment history and outcomes",
-    icon: FileText,
-  },
-]
+  const reportTemplates = [
+    {
+      id: "t1",
+      name: "Initial Assessment",
+      description: "Comprehensive baseline assessment for new patients",
+      icon: User,
+    },
+    {
+      id: "t2",
+      name: "Progress Report",
+      description: "Treatment progress and severity comparison",
+      icon: TrendingDown,
+    },
+    {
+      id: "t3",
+      name: "Treatment Summary",
+      description: "Complete treatment history and outcomes",
+      icon: FileText,
+    },
+  ]
 
-export default function ReportsPage() {
+  // 2. Return the UI
   return (
     <DashboardLayout breadcrumbs={[{ label: "Reports" }]}>
       <div className="space-y-6">
