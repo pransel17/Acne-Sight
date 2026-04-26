@@ -24,9 +24,9 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, breadcrumbs = [] }: DashboardLayoutProps) {
   return (
-    <SidebarProvider>
+    <SidebarProvider className="flex min-h-screen w-full">
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="flex flex-col flex-1 min-w-0 overflow-hidden bg-background">
         <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />

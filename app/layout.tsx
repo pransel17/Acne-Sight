@@ -2,6 +2,7 @@ import React from "react"
 import type { Metadata, Viewport } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
 
+
 import "./globals.css"
 
 const inter = Inter({ 
@@ -29,8 +30,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
+    // FIX 2: Added suppressHydrationWarning to stop the giant red terminal error
+    <html lang="en" className="dark" suppressHydrationWarning>
+      
+      {/* FIX 3: Added flex and min-h-screen to support your dashboard layout */}
+      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased flex min-h-screen`}>
         {children}
       </body>
     </html>

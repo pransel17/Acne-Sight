@@ -74,12 +74,27 @@ export function AppSidebar() {
   const handleLogout = async () => {
     setIsLoggingOut(true)
     try {
-      await fetch("/api/auth/logout", { method: "POST" })
-      router.push("/auth/login")
-      router.refresh()
+      const response = await fetch("/api/auth/logout", { 
+        method: "POST",
+        credentials: "include"
+      })
+      
+      if (response.ok) {
+        // Clear any client-side storage
+        sessionStorage.clear()
+        localStorage.removeItem("acnesight_user")
+        
+        // Force navigation to login
+        window.location.href = "/auth/login"
+      } else {
+        console.error("[v0] Logout failed:", response.status)
+        // Force redirect anyway
+        window.location.href = "/auth/login"
+      }
     } catch (error) {
       console.error("[v0] Logout error:", error)
-      setIsLoggingOut(false)
+      // Force redirect even on error
+      window.location.href = "/auth/login"
     }
   }
 
@@ -151,7 +166,7 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg">
               <Avatar className="size-8">
-                <AvatarImage src="/placeholder-avatar.jpg" alt="Clinician" />
+                <AvatarImage src="/placeholder-logo.png" alt="Clinician" />
                 <AvatarFallback className="bg-primary/20 text-primary">CU</AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
