@@ -2,7 +2,6 @@ import React from "react"
 import type { Metadata, Viewport } from "next"
 import { Inter, JetBrains_Mono } from "next/font/google"
 
-
 import "./globals.css"
 
 const inter = Inter({ 
@@ -30,11 +29,14 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    // FIX 2: Added suppressHydrationWarning to stop the giant red terminal error
     <html lang="en" className="dark" suppressHydrationWarning>
-      
-      {/* FIX 3: Added flex and min-h-screen to support your dashboard layout */}
-      <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased flex min-h-screen`}>
+      {/* REMOVED 'flex' from the body to allow login page centering.
+          ADDED suppressHydrationWarning to body to block browser extension errors.
+      */}
+      <body 
+        className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased min-h-screen`}
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

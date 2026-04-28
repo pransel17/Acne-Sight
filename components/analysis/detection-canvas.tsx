@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
 import { sampleDetections } from "@/lib/mock-data"
-import { Camera, Upload, RotateCcw, Zap, Eye, EyeOff, Settings } from "lucide-react"
+import { Camera, Upload, RotateCcw, Zap, Eye, EyeOff, Settings, Video, VideoOff } from "lucide-react"
 
 interface DetectionCanvasProps {
   isAnalyzing: boolean
@@ -28,11 +28,85 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
   const [showDetections, setShowDetections] = useState(true)
   const [confidenceThreshold, setConfidenceThreshold] = useState([75])
   const [imageLoaded, setImageLoaded] = useState(false)
+  const [isCameraActive, setIsCameraActive] = useState(false)
+  const [cameraError, setCameraError] = useState("")
+  const [videoReady, setVideoReady] = useState(false)
+  
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
-  const handleImageUpload = () => {
-    // Simulate image upload
+  // CLEANUP AND STOP LOGIC
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop())
+      streamRef.current = null
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+    setIsCameraActive(false)
+    setVideoReady(false)
+  }, [])
+
+  // START CAMERA LOGIC
+  const startCamera = useCallback(async () => {
+    setCameraError("")
+    try {
+      const constraints: MediaStreamConstraints = {
+        video: {
+          facingMode: "user", // Change to "environment" for back camera
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia(constraints)
+      streamRef.current = stream
+      setIsCameraActive(true) // Trigger the UI switch
+    } catch (err) {
+      console.error("Camera error:", err)
+      setCameraError("Could not access camera. Please check permissions.")
+    }
+  }, [])
+
+  // EFFECT TO SYNC STREAM TO VIDEO TAG
+  useEffect(() => {
+    if (isCameraActive && streamRef.current && videoRef.current) {
+      videoRef.current.srcObject = streamRef.current
+      videoRef.current.play().catch(e => console.error("Error playing video:", e))
+    }
+  }, [isCameraActive])
+
+  // CAPTURE LOGIC
+  const captureImage = useCallback(() => {
+    if (!videoRef.current || !canvasRef.current) return
+
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const context = canvas.getContext("2d")
+
+    if (!context) return
+
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    
+    // If you mirrored the video in UI, mirror the draw as well
+    context.translate(canvas.width, 0)
+    context.scale(-1, 1)
+    
+    context.drawImage(video, 0, 0, canvas.width, canvas.height)
+    stopCamera()
     setImageLoaded(true)
+  }, [stopCamera])
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setImageLoaded(true)
+    }
   }
 
   const filteredDetections = sampleDetections.filter(
@@ -43,85 +117,110 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
     <Card className="bg-card border-border">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-foreground">Detection View</CardTitle>
-        <div className="flex items-center gap-2">
-          {hasResults && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowDetections(!showDetections)}
-            >
-              {showDetections ? (
-                <EyeOff className="h-4 w-4 mr-2" />
-              ) : (
-                <Eye className="h-4 w-4 mr-2" />
-              )}
-              {showDetections ? "Hide" : "Show"} Detections
-            </Button>
-          )}
-        </div>
+        {hasResults && (
+          <Button variant="ghost" size="sm" onClick={() => setShowDetections(!showDetections)}>
+            {showDetections ? <EyeOff className="h-4 w-4 mr-2" /> : <Eye className="h-4 w-4 mr-2" />}
+            {showDetections ? "Hide" : "Show"} Detections
+          </Button>
+        )}
       </CardHeader>
+      
       <CardContent className="space-y-4">
-        {/* Canvas Area */}
         <div className="relative aspect-[4/3] bg-secondary rounded-lg overflow-hidden border border-border">
-          {!imageLoaded ? (
+          
+          {/* 1. CAMERA LIVE FEED MODE */}
+          {isCameraActive ? (
+            <div className="absolute inset-0 bg-black flex items-center justify-center">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                onCanPlay={() => setVideoReady(true)}
+                // scale-x-[-1] makes it feel like a mirror
+                className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
+              />
+              
+          
+              {videoReady && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+                  <svg viewBox="0 0 280 340" className="w-[70%] h-[85%] opacity-40 text-primary">
+                    <ellipse
+                      cx="140"
+                      cy="150"
+                      rx="120"
+                      ry="150"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeDasharray="8 4" // Makes it look like a clinical guide
+                    />
+                    {/* Optional: Add "Align Face Here" text */}
+                    <text x="140" y="320" textAnchor="middle" fill="currentColor" className="text-[9px] font-bold uppercase tracking-widest">
+                      Align Area of Interest
+                    </text>
+                  </svg>
+                </div>
+              )}
+
+              {/* Overlay Controls */}
+              <div className="absolute bottom-3 inset-x-0 flex justify-center gap-3 z-20">
+                <Button size="lg" onClick={captureImage} className="rounded-full h-10 px-4 shadow-xl">
+                  <Camera className="h-4 w-6 mr-2" />
+                  Capture Photo
+                </Button>
+                <Button size="lg" variant="secondary" onClick={stopCamera} className="rounded-full h-10 w-10 p-0 shadow-xl">
+                  <VideoOff className="h-6 w-6" />
+                </Button>
+              </div>
+
+              <div className="absolute top-4 left-4 z-20">
+                <Badge className="bg-red-500/80 hover:bg-red-500/80 animate-pulse border-none">
+                  LIVE FEED
+                </Badge>
+              </div>
+            </div>
+          ) : !imageLoaded ? (
+            /* 2. INITIAL UPLOAD / START CAMERA UI */
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
               <div className="p-4 rounded-full bg-muted">
                 <Camera className="h-12 w-12 text-muted-foreground" />
               </div>
-              <div className="text-center">
+              <div className="text-center px-4">
                 <p className="text-foreground font-medium">No image loaded</p>
                 <p className="text-sm text-muted-foreground">
-                  Upload an image or capture from camera
+                  Provide a clear photo of the affected area
                 </p>
               </div>
               <div className="flex gap-2">
-                <Button onClick={handleImageUpload}>
+                <Button onClick={() => fileInputRef.current?.click()}>
                   <Upload className="h-4 w-4 mr-2" />
-                  Upload Image
+                  Upload
                 </Button>
-                <Button variant="outline">
-                  <Camera className="h-4 w-4 mr-2" />
-                  Capture
+                <Button variant="outline" onClick={startCamera}>
+                  <Video className="h-4 w-4 mr-2" />
+                  Open Camera
                 </Button>
               </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageUpload}
-              />
+              {cameraError && <p className="text-xs text-destructive">{cameraError}</p>}
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+              <canvas ref={canvasRef} className="hidden" />
             </div>
           ) : (
+            /* 3. STATIC IMAGE + ANALYSIS VIEW */
             <>
-              {/* Simulated face outline */}
-              <div className="absolute inset-0 flex items-center justify-center">
-                <svg viewBox="0 0 280 340" className="w-[70%] h-[85%] opacity-30">
-                  <ellipse
-                    cx="140"
-                    cy="170"
-                    rx="100"
-                    ry="130"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className="text-muted-foreground"
-                  />
-                  {/* Facial features placeholder */}
-                  <ellipse cx="100" cy="130" rx="15" ry="10" fill="none" stroke="currentColor" strokeWidth="1" className="text-muted-foreground" />
-                  <ellipse cx="180" cy="130" rx="15" ry="10" fill="none" stroke="currentColor" strokeWidth="1" className="text-muted-foreground" />
-                  <ellipse cx="140" cy="175" rx="12" ry="18" fill="none" stroke="currentColor" strokeWidth="1" className="text-muted-foreground" />
-                  <path d="M 110 220 Q 140 250 170 220" fill="none" stroke="currentColor" strokeWidth="1" className="text-muted-foreground" />
+              <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
+                <svg viewBox="0 0 280 340" className="w-[70%] h-[85%]">
+                   <ellipse cx="140" cy="170" rx="100" ry="130" fill="none" stroke="currentColor" strokeWidth="2" />
                 </svg>
               </div>
 
-              {/* Detection overlays */}
               {hasResults && showDetections && (
                 <div className="absolute inset-0">
                   {filteredDetections.map((detection) => (
                     <div
                       key={detection.id}
-                      className="absolute border-2 rounded-sm transition-all duration-200 hover:scale-105"
+                      className="absolute border-2 rounded-sm"
                       style={{
                         left: `${(detection.x / 280) * 100}%`,
                         top: `${(detection.y / 340) * 100}%`,
@@ -131,13 +230,7 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
                         backgroundColor: `${lesionColors[detection.type]}20`,
                       }}
                     >
-                      <span
-                        className="absolute -top-5 left-0 text-[10px] font-mono px-1 rounded"
-                        style={{
-                          backgroundColor: lesionColors[detection.type],
-                          color: "#0a0b0d",
-                        }}
-                      >
+                      <span className="absolute -top-5 left-0 text-[10px] font-mono px-1 rounded" style={{ backgroundColor: lesionColors[detection.type], color: "#000" }}>
                         {detection.type.charAt(0)} {Math.round(detection.confidence * 100)}%
                       </span>
                     </div>
@@ -145,76 +238,43 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
                 </div>
               )}
 
-              {/* Analyzing overlay */}
               {isAnalyzing && (
-                <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center gap-4">
-                  <div className="relative">
-                    <div className="w-16 h-16 border-4 border-primary/30 rounded-full" />
-                    <div className="absolute inset-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                  </div>
-                  <p className="text-foreground font-medium">Analyzing with YOLOv8...</p>
-                  <p className="text-sm text-muted-foreground">Detecting and classifying lesions</p>
-                </div>
-              )}
-
-              {/* Quality indicators */}
-              {!isAnalyzing && (
-                <div className="absolute bottom-4 left-4 right-4 flex justify-between">
-                  <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                    Quality: 94%
-                  </Badge>
-                  <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30">
-                    Lighting: Optimal
-                  </Badge>
+                <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center gap-4 z-30">
+                  <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                  <p className="font-medium">ACNE-SIGHT YOLOv8 Analyzing...</p>
                 </div>
               )}
             </>
           )}
         </div>
 
-        {/* Controls */}
+        {/* Action Controls */}
         {imageLoaded && (
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              {!hasResults ? (
-                <Button className="flex-1" onClick={onAnalyze} disabled={isAnalyzing}>
-                  <Zap className="h-4 w-4 mr-2" />
-                  {isAnalyzing ? "Analyzing..." : "Run Analysis"}
-                </Button>
-              ) : (
-                <Button className="flex-1 bg-transparent" variant="outline" onClick={onReset}>
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  New Analysis
-                </Button>
-              )}
-              <Button variant="outline" onClick={() => setImageLoaded(false)}>
-                <Upload className="h-4 w-4 mr-2" />
-                Change Image
-              </Button>
-            </div>
-
-            {hasResults && (
-              <div className="p-4 bg-secondary rounded-lg space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Settings className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-sm text-foreground">Confidence Threshold</span>
-                  </div>
-                  <span className="text-sm font-mono text-primary">{confidenceThreshold[0]}%</span>
+          <div className="flex flex-col gap-4">
+             <div className="flex gap-2">
+                {!hasResults ? (
+                  <Button className="flex-1" onClick={onAnalyze} disabled={isAnalyzing}>
+                    <Zap className="h-4 w-4 mr-2" />
+                    {isAnalyzing ? "Processing..." : "Run Analysis"}
+                  </Button>
+                ) : (
+                  <Button className="flex-1" variant="outline" onClick={onReset}>
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reset
+                  </Button>
+                )}
+                <Button variant="ghost" onClick={() => setImageLoaded(false)}>Change Image</Button>
+             </div>
+             
+             {hasResults && (
+                <div className="p-3 bg-secondary/50 rounded-md border border-border">
+                   <div className="flex justify-between text-xs mb-2">
+                      <span className="text-muted-foreground">Confidence Filter</span>
+                      <span className="text-primary font-mono">{confidenceThreshold[0]}%</span>
+                   </div>
+                   <Slider value={confidenceThreshold} onValueChange={setConfidenceThreshold} min={50} max={100} step={5} />
                 </div>
-                <Slider
-                  value={confidenceThreshold}
-                  onValueChange={setConfidenceThreshold}
-                  min={50}
-                  max={100}
-                  step={5}
-                  className="w-full"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Showing {filteredDetections.length} of {sampleDetections.length} detections
-                </p>
-              </div>
-            )}
+             )}
           </div>
         )}
       </CardContent>

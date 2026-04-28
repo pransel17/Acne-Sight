@@ -43,7 +43,7 @@ async def list_patients(skip: int = Query(0), limit: int = Query(50)):
         WHERE is_active = true ORDER BY created_at DESC LIMIT $1 OFFSET $2""",
         limit, skip
     )
-    # Convert list of Records to list of dicts
+    
     return [dict(p) for p in patients]
 
 @router.post("/", response_model=PatientResponse)
@@ -55,8 +55,8 @@ async def create_patient(patient: PatientCreate):
     await db.execute(
         """INSERT INTO patients 
         (id, patient_number, first_name, last_name, date_of_birth, gender, 
-         email, phone, skin_type)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""",
+         email, phone, skin_type, is_active)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)""",
         patient_id, patient_number, patient.first_name, patient.last_name,
         patient.date_of_birth, patient.gender, patient.email, patient.phone,
         patient.skin_type
@@ -65,14 +65,14 @@ async def create_patient(patient: PatientCreate):
     new_patient = await db.fetchrow(
         """SELECT id, patient_number, first_name, last_name, date_of_birth, 
         email, phone, skin_type, created_at FROM patients WHERE id = $1""",
-        patient_id
+        patient_id  
     )
     
  
     return dict(new_patient)
 
 @router.get("/{patient_id}", response_model=PatientResponse)
-async def get_patient(patient_id: str):
+async def get_patient(patient_id: uuid.UUID):
     """Get patient by ID"""
     patient = await db.fetchrow(
         """SELECT id, patient_number, first_name, last_name, date_of_birth, 

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from database import db
 from config import JWT_SECRET, JWT_ALGORITHM, ACCESS_TOKEN_EXPIRE_MINUTES
 import uuid
+from fastapi import Response
 
 router = APIRouter()
 
@@ -71,7 +72,7 @@ async def get_current_user(token: str = None):
 @router.post("/signup", response_model=TokenResponse)
 async def signup(request: SignUpRequest):
     """Register new clinician account"""
-    # Check if user exists
+   
     existing_user = await db.fetchrow(
         "SELECT id FROM users WHERE email = $1",
         request.email
@@ -79,10 +80,10 @@ async def signup(request: SignUpRequest):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Hash password
+  
     hashed_password = await hash_password(request.password)
     
-    # Create user
+    
     user_id = str(uuid.uuid4())
     await db.execute(
         """INSERT INTO users 
@@ -92,7 +93,7 @@ async def signup(request: SignUpRequest):
         request.last_name, 'dermatologist', True
     )
     
-    # Create token
+    
     token = create_access_token(user_id, request.email, 'dermatologist')
     
     return {
@@ -110,7 +111,7 @@ async def signup(request: SignUpRequest):
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest):
     """Login with email and password"""
-    # Get user
+   
     user = await db.fetchrow(
         "SELECT id, email, password_hash, first_name, last_name, role FROM users WHERE email = $1",
         request.email
@@ -119,7 +120,7 @@ async def login(request: LoginRequest):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    # Verify password
+     
     if not await verify_password(request.password, user['password_hash']):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
@@ -156,3 +157,20 @@ async def get_me(token: str = None):
         "role": user['role'],
         "avatar_url": user['avatar_url']
     }
+
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    """
+    Logout route: Clears the acnesight_session cookie
+    """
+ 
+    response.delete_cookie(
+        key="acnesight_session",
+        path="/",
+        httponly=True,
+        samesite="lax"
+    )
+    
+    return {"message": "Logged out successfully"}

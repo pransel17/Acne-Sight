@@ -1,7 +1,6 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { weeklyScanData } from "@/lib/mock-data"
 import {
   AreaChart,
   Area,
@@ -11,17 +10,49 @@ import {
   ResponsiveContainer,
 } from "recharts"
 
-export function WeeklyScansChart() {
+interface WeeklyScansChartProps {
+  patients: any[]
+}
+
+export function WeeklyScansChart({ patients }: WeeklyScansChartProps) {
+  
+  const chartData = (() => {
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    const last7Days: { day: string; dateStr: string; count: number }[] = []
+    
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i)
+      last7Days.push({
+        day: days[d.getDay()],
+        dateStr: d.toISOString().split('T')[0],
+        count: 0
+      })
+    }
+
+    patients?.forEach(patient => {
+      if (patient.created_at) {
+        const patientDate = new Date(patient.created_at).toISOString().split('T')[0]
+        const dayMatch = last7Days.find(d => d.dateStr === patientDate)
+        if (dayMatch) {
+          dayMatch.count += 1
+        }
+      }
+    })
+
+    return last7Days
+  })()
+
   return (
     <Card className="bg-card border-border">
       <CardHeader>
-        <CardTitle className="text-foreground">Weekly Scans</CardTitle>
-        <CardDescription>Number of patient scans this week</CardDescription>
+        <CardTitle className="text-foreground">Patient Registrations</CardTitle>
+        <CardDescription>New patient records created this week</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={weeklyScanData}>
+            <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="scanGradient" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="hsl(199, 89%, 48%)" stopOpacity={0.3} />
@@ -40,6 +71,7 @@ export function WeeklyScansChart() {
                 fontSize={12}
                 tickLine={false}
                 axisLine={false}
+                allowDecimals={false}
               />
               <Tooltip
                 contentStyle={{
@@ -48,11 +80,11 @@ export function WeeklyScansChart() {
                   borderRadius: "8px",
                   color: "hsl(210, 20%, 98%)",
                 }}
-                formatter={(value: number) => [`${value} scans`, "Total"]}
+                formatter={(value: number) => [`${value} New Patients`, "Count"]}
               />
               <Area
                 type="monotone"
-                dataKey="scans"
+                dataKey="count"
                 stroke="hsl(199, 89%, 48%)"
                 strokeWidth={2}
                 fill="url(#scanGradient)"

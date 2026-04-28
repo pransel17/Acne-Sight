@@ -72,30 +72,39 @@ export function AppSidebar() {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleLogout = async () => {
-    setIsLoggingOut(true)
+    if (isLoggingOut) return; // Prevent spamming the button
+    setIsLoggingOut(true);
+
     try {
-      const response = await fetch("/api/auth/logout", { 
+      // 1. Call your FastAPI backend directly
+      // Replace localhost:8000 with your actual backend URL if different
+      const response = await fetch("http://localhost:8000/api/logout", { 
         method: "POST",
-        credentials: "include"
-      })
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include" // CRITICAL: This allows the browser to send/receive cookies
+      });
       
       if (response.ok) {
-        // Clear any client-side storage
-        sessionStorage.clear()
-        localStorage.removeItem("acnesight_user")
+        // 2. Clear local storage for good measure
+        sessionStorage.clear();
+        localStorage.removeItem("acnesight_user");
         
-        // Force navigation to login
-        window.location.href = "/auth/login"
+        // 3. Use window.location.href to force a full refresh. 
+        // This clears the Next.js cache and triggers your proxy.ts middleware.
+        window.location.href = "/auth/login";
       } else {
-        console.error("[v0] Logout failed:", response.status)
-        // Force redirect anyway
-        window.location.href = "/auth/login"
+        console.error("Logout failed on server:", response.status);
+        // Redirect anyway for safety
+        window.location.href = "/auth/login";
       }
     } catch (error) {
-      console.error("[v0] Logout error:", error)
-      // Force redirect even on error
-      window.location.href = "/auth/login"
+      console.error("Logout network error:", error);
+      // Even if the backend is down, we kick the user out of the UI
+      window.location.href = "/auth/login";
     }
+    
   }
 
   return (

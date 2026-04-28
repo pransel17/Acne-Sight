@@ -5,12 +5,25 @@ import { StatsCards } from "@/components/dashboard/stats-cards"
 import { SeverityDistributionChart } from "@/components/dashboard/severity-distribution-chart"
 import { WeeklyScansChart } from "@/components/dashboard/weekly-scans-chart"
 import { RecentPatients } from "@/components/dashboard/recent-patients"
+import { cookies } from "next/headers"
 
 export default async function DashboardPage() {
-  // Check if user is authenticated
+  const cookieStore = await cookies()
+  const token = cookieStore.get("acnesight_session")?.value
+
   const user = await getCurrentUser()
   if (!user) {
     redirect("/auth/login")
+  }
+
+  const response = await fetch("http://localhost:8000/api/patients/", {
+    headers: { 'Authorization': `Bearer ${token}` },
+    cache: 'no-store'
+  })
+
+  let patients = []
+  if (response.ok) {
+    patients = await response.json()
   }
 
   return (
@@ -26,11 +39,11 @@ export default async function DashboardPage() {
         <StatsCards />
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <WeeklyScansChart />
+          <WeeklyScansChart patients={patients} />
           <SeverityDistributionChart />
         </div>
 
-        <RecentPatients />
+        <RecentPatients patients={patients} />
       </div>
     </DashboardLayout>
   )
