@@ -1,18 +1,27 @@
 "use client"
 
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
 import { Badge } from "@/components/ui/badge"
-import { sampleDetections } from "@/lib/mock-data"
-import { Camera, Upload, RotateCcw, Zap, Eye, EyeOff, Settings, Video, VideoOff } from "lucide-react"
+import { Upload, RotateCcw, Zap, Eye, EyeOff, Wifi, Image as ImageIcon, Camera } from "lucide-react"
+
+interface Detection {
+  id: string;
+  type: string;
+  confidence: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 interface DetectionCanvasProps {
-  isAnalyzing: boolean
-  hasResults: boolean
-  onAnalyze: () => void
-  onReset: () => void
+  isAnalyzing: boolean;
+  hasResults: boolean;
+  onAnalyze: () => void;
+  onReset: () => void;
 }
 
 const lesionColors: Record<string, string> = {
@@ -28,88 +37,61 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
   const [showDetections, setShowDetections] = useState(true)
   const [confidenceThreshold, setConfidenceThreshold] = useState([75])
   const [imageLoaded, setImageLoaded] = useState(false)
-  const [isCameraActive, setIsCameraActive] = useState(false)
-  const [cameraError, setCameraError] = useState("")
-  const [videoReady, setVideoReady] = useState(false)
   
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const streamRef = useRef<MediaStream | null>(null)
+  // IoT States
+  const [isWaitingForPi, setIsWaitingForPi] = useState(false)
+  const [piScanImageUrl, setPiScanImageUrl] = useState<string | null>(null)
+  const [piDetections, setPiDetections] = useState<Detection[]>([])
 
-  // CLEANUP AND STOP LOGIC
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop())
-      streamRef.current = null
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
-    setIsCameraActive(false)
-    setVideoReady(false)
-  }, [])
+  // ==========================================
+  // REPLACE THIS WITH YOUR RASPBERRY PI'S IP!
+  // ==========================================
+  const RASPBERRY_PI_IP = "10.166.133.75";
+  
+  const startListeningToPi = () => {
+    setIsWaitingForPi(true)
+  }
 
-  // START CAMERA LOGIC
-  const startCamera = useCallback(async () => {
-    setCameraError("")
+  const triggerCapture = async () => {
     try {
-      const constraints: MediaStreamConstraints = {
-        video: {
-          facingMode: "user", // Change to "environment" for back camera
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
+      // 1. Tell the Pi to snap the photo and send it to the backend
+      const response = await fetch(`http://${RASPBERRY_PI_IP}:5000/capture`, { 
+        method: 'POST' 
+      });
+      
+      if (response.ok) {
+        console.log("📸 Pi successfully captured and sent the image!");
+        
+        // 2. Stop the live feed UI
+        setIsWaitingForPi(false); 
+        setImageLoaded(true);
+        
+        // 3. For testing, we load the mock image so you see something instantly.
+        // Once your DB is hooked up, your parent component will feed the real image here.
+        setPiScanImageUrl("/mock-patient-scan.jpg");
+        
+        // 4. Trigger the parent to sync AI results
+        onAnalyze(); 
+      } else {
+        console.error("Pi capture failed:", await response.text());
       }
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints)
-      streamRef.current = stream
-      setIsCameraActive(true) // Trigger the UI switch
-    } catch (err) {
-      console.error("Camera error:", err)
-      setCameraError("Could not access camera. Please check permissions.")
-    }
-  }, [])
-
-  // EFFECT TO SYNC STREAM TO VIDEO TAG
-  useEffect(() => {
-    if (isCameraActive && streamRef.current && videoRef.current) {
-      videoRef.current.srcObject = streamRef.current
-      videoRef.current.play().catch(e => console.error("Error playing video:", e))
-    }
-  }, [isCameraActive])
-
-  // CAPTURE LOGIC
-  const captureImage = useCallback(() => {
-    if (!videoRef.current || !canvasRef.current) return
-
-    const video = videoRef.current
-    const canvas = canvasRef.current
-    const context = canvas.getContext("2d")
-
-    if (!context) return
-
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-    
-    // If you mirrored the video in UI, mirror the draw as well
-    context.translate(canvas.width, 0)
-    context.scale(-1, 1)
-    
-    context.drawImage(video, 0, 0, canvas.width, canvas.height)
-    stopCamera()
-    setImageLoaded(true)
-  }, [stopCamera])
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setImageLoaded(true)
+    } catch (error) {
+      console.error("Failed to reach the Raspberry Pi. Is the Python script running?", error);
     }
   }
 
-  const filteredDetections = sampleDetections.filter(
+  const cancelListening = () => {
+    setIsWaitingForPi(false)
+  }
+
+  const handleReset = () => {
+    setImageLoaded(false)
+    setPiScanImageUrl(null)
+    setPiDetections([])
+    onReset()
+  }
+
+  const filteredDetections = piDetections.filter(
     (d) => d.confidence * 100 >= confidenceThreshold[0]
   )
 
@@ -128,92 +110,62 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
       <CardContent className="space-y-4">
         <div className="relative aspect-[4/3] bg-secondary rounded-lg overflow-hidden border border-border">
           
-          {/* 1. CAMERA LIVE FEED MODE */}
-          {isCameraActive ? (
-            <div className="absolute inset-0 bg-black flex items-center justify-center">
-              <video
-                ref={videoRef}
-                autoPlay
-                playsInline
-                muted
-                onCanPlay={() => setVideoReady(true)}
-                // scale-x-[-1] makes it feel like a mirror
-                className={`w-full h-full object-cover scale-x-[-1] transition-opacity duration-300 ${videoReady ? 'opacity-100' : 'opacity-0'}`}
+          {/* 1. LIVE RASPBERRY PI VIEWFINDER */}
+          {isWaitingForPi ? (
+            <div className="absolute inset-0 bg-black flex flex-col">
+              <img 
+                src={`http://${RASPBERRY_PI_IP}:5000/video_feed`}
+                alt="Live Pi Feed" 
+                className="w-full h-full object-cover"
               />
               
-          
-              {videoReady && (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-                  <svg viewBox="0 0 280 340" className="w-[70%] h-[85%] opacity-40 text-primary">
-                    <ellipse
-                      cx="140"
-                      cy="150"
-                      rx="120"
-                      ry="150"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeDasharray="8 4" // Makes it look like a clinical guide
-                    />
-                    {/* Optional: Add "Align Face Here" text */}
-                    <text x="140" y="320" textAnchor="middle" fill="currentColor" className="text-[9px] font-bold uppercase tracking-widest">
-                      Align Area of Interest
-                    </text>
-                  </svg>
-                </div>
-              )}
-
-              {/* Overlay Controls */}
-              <div className="absolute bottom-3 inset-x-0 flex justify-center gap-3 z-20">
-                <Button size="lg" onClick={captureImage} className="rounded-full h-10 px-4 shadow-xl">
-                  <Camera className="h-4 w-6 mr-2" />
-                  Capture Photo
+              <div className="absolute bottom-4 inset-x-0 flex justify-center gap-4 z-20">
+                <Button size="lg" onClick={triggerCapture} className="rounded-full shadow-xl bg-blue-600 hover:bg-blue-700 text-white">
+                  <Camera className="h-5 w-5 mr-2" />
+                  Capture & Analyze
                 </Button>
-                <Button size="lg" variant="secondary" onClick={stopCamera} className="rounded-full h-10 w-10 p-0 shadow-xl">
-                  <VideoOff className="h-6 w-6" />
+                <Button variant="destructive" onClick={cancelListening} className="rounded-full shadow-xl">
+                  Cancel
                 </Button>
               </div>
-
+              
               <div className="absolute top-4 left-4 z-20">
-                <Badge className="bg-red-500/80 hover:bg-red-500/80 animate-pulse border-none">
-                  LIVE FEED
+                <Badge className="bg-red-500 hover:bg-red-600 animate-pulse border-none text-white">
+                  <Wifi className="h-3 w-3 mr-1 inline" /> LIVE Pi FEED
                 </Badge>
               </div>
             </div>
           ) : !imageLoaded ? (
-            /* 2. INITIAL UPLOAD / START CAMERA UI */
+            
+            /* 2. INITIAL CONNECT UI */
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
-              <div className="p-4 rounded-full bg-muted">
-                <Camera className="h-12 w-12 text-muted-foreground" />
+              <div className="p-4 rounded-full bg-primary/10">
+                <ImageIcon className="h-12 w-12 text-primary" />
               </div>
               <div className="text-center px-4">
-                <p className="text-foreground font-medium">No image loaded</p>
+                <p className="text-foreground font-medium">No scan loaded</p>
                 <p className="text-sm text-muted-foreground">
-                  Provide a clear photo of the affected area
+                  Connect to the Raspberry Pi hardware to begin.
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Button onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload
-                </Button>
-                <Button variant="outline" onClick={startCamera}>
-                  <Video className="h-4 w-4 mr-2" />
-                  Open Camera
+              <div className="flex gap-2 mt-2">
+                <Button variant="default" onClick={startListeningToPi} className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg">
+                  <Wifi className="h-4 w-4 mr-2" />
+                  Connect to Pi Scanner
                 </Button>
               </div>
-              {cameraError && <p className="text-xs text-destructive">{cameraError}</p>}
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-              <canvas ref={canvasRef} className="hidden" />
             </div>
           ) : (
-            /* 3. STATIC IMAGE + ANALYSIS VIEW */
+            
+            /* 3. STATIC IMAGE + PI YOLOv8 RESULTS VIEW */
             <>
-              <div className="absolute inset-0 flex items-center justify-center opacity-20 pointer-events-none">
-                <svg viewBox="0 0 280 340" className="w-[70%] h-[85%]">
-                   <ellipse cx="140" cy="170" rx="100" ry="130" fill="none" stroke="currentColor" strokeWidth="2" />
-                </svg>
-              </div>
+              {piScanImageUrl && (
+                <img 
+                  src={piScanImageUrl} 
+                  alt="Clinical Scan from Pi" 
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              )}
 
               {hasResults && showDetections && (
                 <div className="absolute inset-0">
@@ -226,11 +178,11 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
                         top: `${(detection.y / 340) * 100}%`,
                         width: `${(detection.width / 280) * 100}%`,
                         height: `${(detection.height / 340) * 100}%`,
-                        borderColor: lesionColors[detection.type],
-                        backgroundColor: `${lesionColors[detection.type]}20`,
+                        borderColor: lesionColors[detection.type] || "#fff",
+                        backgroundColor: `${lesionColors[detection.type] || "#fff"}20`,
                       }}
                     >
-                      <span className="absolute -top-5 left-0 text-[10px] font-mono px-1 rounded" style={{ backgroundColor: lesionColors[detection.type], color: "#000" }}>
+                      <span className="absolute -top-5 left-0 text-[10px] font-mono px-1 rounded shadow-sm" style={{ backgroundColor: lesionColors[detection.type] || "#fff", color: "#000" }}>
                         {detection.type.charAt(0)} {Math.round(detection.confidence * 100)}%
                       </span>
                     </div>
@@ -239,9 +191,9 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
               )}
 
               {isAnalyzing && (
-                <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center gap-4 z-30">
+                <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center gap-4 z-30 backdrop-blur-sm">
                   <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-                  <p className="font-medium">ACNE-SIGHT YOLOv8 Analyzing...</p>
+                  <p className="font-medium font-mono text-primary uppercase tracking-wider">Syncing AI Results...</p>
                 </div>
               )}
             </>
@@ -252,24 +204,16 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
         {imageLoaded && (
           <div className="flex flex-col gap-4">
              <div className="flex gap-2">
-                {!hasResults ? (
-                  <Button className="flex-1" onClick={onAnalyze} disabled={isAnalyzing}>
-                    <Zap className="h-4 w-4 mr-2" />
-                    {isAnalyzing ? "Processing..." : "Run Analysis"}
-                  </Button>
-                ) : (
-                  <Button className="flex-1" variant="outline" onClick={onReset}>
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Reset
-                  </Button>
-                )}
-                <Button variant="ghost" onClick={() => setImageLoaded(false)}>Change Image</Button>
+                <Button className="flex-1" variant="outline" onClick={handleReset}>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Clear & Scan New Patient
+                </Button>
              </div>
              
              {hasResults && (
                 <div className="p-3 bg-secondary/50 rounded-md border border-border">
                    <div className="flex justify-between text-xs mb-2">
-                      <span className="text-muted-foreground">Confidence Filter</span>
+                      <span className="text-muted-foreground font-medium">Confidence Filter</span>
                       <span className="text-primary font-mono">{confidenceThreshold[0]}%</span>
                    </div>
                    <Slider value={confidenceThreshold} onValueChange={setConfidenceThreshold} min={50} max={100} step={5} />
