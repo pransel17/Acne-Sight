@@ -2,9 +2,13 @@ import { redirect } from "next/navigation"
 import { getCurrentUser } from "@/lib/auth"
 import { DashboardLayout } from "@/components/dashboard-layout"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { FileText, Download, Calendar, User, TrendingDown, Eye } from "lucide-react"
+
+// 1. IMPORTANT: Import the new interactive dialog!
+import { NewReportDialog } from "@/components/reports/new-report-panel"
+import { cookies } from "next/headers"
 
 export default async function ReportsPage() {
   const user = await getCurrentUser()
@@ -13,41 +17,36 @@ export default async function ReportsPage() {
     redirect("/auth/login")
   }
 
-  // 1. Define your data inside the function (or above it)
-  const recentReports = [
-    {
-      id: "RPT-2026-0234",
-      patient: "Jane Doe",
-      patientId: "PT-2024-0847",
-      type: "Progress Report",
-      date: "2026-02-01",
-      status: "completed",
-    },
-    {
-      id: "RPT-2026-0233",
-      patient: "John Smith",
-      patientId: "PT-2024-0923",
-      type: "Initial Assessment",
-      date: "2026-01-28",
-      status: "completed",
-    },
-    {
-      id: "RPT-2026-0232",
-      patient: "Emily Chen",
-      patientId: "PT-2024-1102",
-      type: "Treatment Evaluation",
-      date: "2026-01-25",
-      status: "completed",
-    },
-    {
-      id: "RPT-2026-0231",
-      patient: "Michael Brown",
-      patientId: "PT-2024-1205",
-      type: "Progress Report",
-      date: "2026-01-22",
-      status: "completed",
-    },
-  ]
+  // 2. Fetch the real patients from your backend so the dropdown works
+  // (If you use a token, make sure to pass it in the headers)
+  const cookieStore = await cookies()
+  const token = cookieStore.get("acnesight_session")?.value
+
+  let patients = []
+  try {
+    const patientsRes = await fetch("http://localhost:8000/api/patients/", {
+      headers: { "Cookie": `acnesight_session=${token}` },
+      cache: "no-store"
+    })
+    if (patientsRes.ok) {
+      patients = await patientsRes.json()
+    }
+  } catch (error) {
+    console.error("Failed to fetch patients:", error)
+  }
+
+  // 3. Fetch real reports (replacing your hardcoded recentReports array)
+  let recentReports = []
+  try {
+    const reportsRes = await fetch("http://localhost:8000/api/reports/", {
+      cache: "no-store"
+    })
+    if (reportsRes.ok) {
+      recentReports = await reportsRes.json()
+    }
+  } catch (error) {
+    console.error("Failed to fetch reports:", error)
+  }
 
   const reportTemplates = [
     {
@@ -70,7 +69,6 @@ export default async function ReportsPage() {
     },
   ]
 
-  // 2. Return the UI
   return (
     <DashboardLayout breadcrumbs={[{ label: "Reports" }]}>
       <div className="space-y-6">
@@ -81,10 +79,10 @@ export default async function ReportsPage() {
               Generate and manage clinical reports
             </p>
           </div>
-          <Button>
-            <FileText className="h-4 w-4 mr-2" />
-            New Report
-          </Button>
+          
+          {/* 4. THE FIX: We replaced the static <Button> with your dynamic component */}
+          <NewReportDialog patients={patients} />
+          
         </div>
 
         {/* Report Templates */}
@@ -114,52 +112,56 @@ export default async function ReportsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentReports.map((report) => (
-                <div
-                  key={report.id}
-                  className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 rounded-lg bg-muted">
-                      <FileText className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-foreground">{report.type}</p>
-                        <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">
-                          {report.status}
-                        </Badge>
+              {recentReports.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">No reports found in the database.</div>
+              ) : (
+                recentReports.map((report: any) => (
+                  <div
+                    key={report.id}
+                    className="flex items-center justify-between p-4 rounded-lg bg-secondary/50 hover:bg-secondary transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 rounded-lg bg-muted">
+                        <FileText className="h-5 w-5 text-muted-foreground" />
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {report.patient} ({report.patientId})
-                      </p>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-foreground">{report.report_type}</p>
+                          <Badge variant="outline" className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-xs">
+                            {report.is_finalized ? "finalized" : "draft"}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {report.title}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right hidden sm:block">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(report.created_at).toLocaleDateString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </p>
+                        <p className="text-xs font-mono text-muted-foreground">{report.report_number}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Eye className="h-4 w-4" />
+                          <span className="sr-only">View report</span>
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Download className="h-4 w-4" />
+                          <span className="sr-only">Download report</span>
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right hidden sm:block">
-                      <p className="text-xs text-muted-foreground flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(report.date).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                          year: "numeric",
-                        })}
-                      </p>
-                      <p className="text-xs font-mono text-muted-foreground">{report.id}</p>
-                    </div>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Eye className="h-4 w-4" />
-                        <span className="sr-only">View report</span>
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Download className="h-4 w-4" />
-                        <span className="sr-only">Download report</span>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

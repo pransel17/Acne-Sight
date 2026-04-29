@@ -1,43 +1,43 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 import os
 from database import db
 from dotenv import load_dotenv
-from datetime import datetime, timedelta
-import jwt
-import uuid
+from datetime import datetime
+
+# Import routers at the top
+from routers import auth, patients, scans, treatments, reports
 
 # Load environment variables
 load_dotenv()
 
+# --- Lifespan Context Manager ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Connect to database
+    print("Connecting to database...")
+    await db.connect()
+    yield
+    # Shutdown: Disconnect from database
+    print("Disconnecting from database...")
+    await db.disconnect()
+
 app = FastAPI(
     title="ACNE SIGHT API",
     description="Clinical Acne Detection System Backend",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan # Attach the lifespan here
 )
-
-@app.on_event("startup")
-async def startup_event():
-    print("Connecting to database...")
-    await db.connect()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    print("Disconnecting from database...")
-    await db.disconnect()
 
 # CORS configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "*"],
+    allow_origins=["http://localhost:3000", "http://localhost:3001"], # Removed "*" for better security with credentials
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Import routers
-from routers import auth, patients, scans, treatments, reports
 
 # Include routers
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
