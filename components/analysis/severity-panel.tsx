@@ -9,6 +9,7 @@ import Link from "next/link"
 
 interface SeverityPanelProps {
   hasResults: boolean
+  selectedPatientId: string;
 }
 
 export function SeverityPanel({ hasResults }: SeverityPanelProps) {

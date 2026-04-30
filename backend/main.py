@@ -5,6 +5,7 @@ import os
 from database import db
 from dotenv import load_dotenv
 from datetime import datetime
+from fastapi.staticfiles import StaticFiles
 
 # Import routers at the top
 from routers import auth, patients, scans, treatments, reports
@@ -12,22 +13,28 @@ from routers import auth, patients, scans, treatments, reports
 # Load environment variables
 load_dotenv()
 
-# --- Lifespan Context Manager ---
+if not os.path.exists("uploads"):
+    os.makedirs("uploads")
+    print("Created 'uploads' directory.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Connect to database
+    
     print("Connecting to database...")
     await db.connect()
     yield
-    # Shutdown: Disconnect from database
+ 
     print("Disconnecting from database...")
     await db.disconnect()
+    
+    
 
 app = FastAPI(
     title="ACNE SIGHT API",
     description="Clinical Acne Detection System Backend",
     version="1.0.0",
-    lifespan=lifespan # Attach the lifespan here
+    lifespan=lifespan  
 )
 
 # CORS configuration
@@ -45,6 +52,7 @@ app.include_router(patients.router, prefix="/api/patients", tags=["Patients"])
 app.include_router(scans.router, prefix="/api/scans", tags=["Scans"])
 app.include_router(treatments.router, prefix="/api/treatments", tags=["Treatments"])
 app.include_router(reports.router, prefix="/api/reports", tags=["Reports"])
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 @app.get("/")
 async def root():

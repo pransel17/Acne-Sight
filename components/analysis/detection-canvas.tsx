@@ -8,18 +8,20 @@ import { Badge } from "@/components/ui/badge"
 import { Upload, RotateCcw, Zap, Eye, EyeOff, Wifi, Image as ImageIcon, Camera } from "lucide-react"
 
 interface Detection {
-  id: string;
-  type: string;
+  id: string;      
+  class: string;   
   confidence: number;
   x: number;
   y: number;
   width: number;
   height: number;
+  
 }
 
 interface DetectionCanvasProps {
   isAnalyzing: boolean;
   hasResults: boolean;
+  selectedPatientId: string;
   onAnalyze: () => void;
   onReset: () => void;
 }
@@ -33,7 +35,7 @@ const lesionColors: Record<string, string> = {
   PIH: "#8b5cf6",
 }
 
-export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }: DetectionCanvasProps) {
+export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset, selectedPatientId }: DetectionCanvasProps) {
   const [showDetections, setShowDetections] = useState(true)
   const [confidenceThreshold, setConfidenceThreshold] = useState([75])
   const [imageLoaded, setImageLoaded] = useState(false)
@@ -43,42 +45,48 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
   const [piScanImageUrl, setPiScanImageUrl] = useState<string | null>(null)
   const [piDetections, setPiDetections] = useState<Detection[]>([])
 
-  // ==========================================
-  // REPLACE THIS WITH YOUR RASPBERRY PI'S IP!
-  // ==========================================
-  const RASPBERRY_PI_IP = "10.166.133.75";
+
+  const RASPBERRY_PI_IP = "192.168.1.13";
   
   const startListeningToPi = () => {
     setIsWaitingForPi(true)
   }
 
   const triggerCapture = async () => {
-    try {
-      // 1. Tell the Pi to snap the photo and send it to the backend
-      const response = await fetch(`http://${RASPBERRY_PI_IP}:5000/capture`, { 
-        method: 'POST' 
-      });
-      
-      if (response.ok) {
-        console.log("📸 Pi successfully captured and sent the image!");
-        
-        // 2. Stop the live feed UI
-        setIsWaitingForPi(false); 
-        setImageLoaded(true);
-        
-        // 3. For testing, we load the mock image so you see something instantly.
-        // Once your DB is hooked up, your parent component will feed the real image here.
-        setPiScanImageUrl("/mock-patient-scan.jpg");
-        
-        // 4. Trigger the parent to sync AI results
-        onAnalyze(); 
-      } else {
-        console.error("Pi capture failed:", await response.text());
-      }
-    } catch (error) {
-      console.error("Failed to reach the Raspberry Pi. Is the Python script running?", error);
+    if (!selectedPatientId) {
+      alert("Please select a patient first!");
+      return;
     }
-  }
+
+    setIsWaitingForPi(false); 
+    onAnalyze(); 
+
+    try {
+      // Ipadala ang selectedPatientId sa Pi via POST body
+      const response = await fetch(`http://${RASPBERRY_PI_IP}:5000/capture`, { 
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          patient_id: selectedPatientId,
+          performed_by: "6835a666-4e55-46f4-a021-3945c557683d" // Halimbawa ng Admin/Clinician ID
+        })
+      });
+
+      const data = await response.json();
+      console.log("RAW DATA FROM PI:", data);
+      console.log("ROBOFLOW PREDICTIONS:", data.predictions);
+
+      if (data.status === "success") {
+        setPiScanImageUrl(`${data.image_url}?t=${Date.now()}`);
+        setPiDetections(data.predictions);
+        setImageLoaded(true);
+      } 
+    } catch (error) {
+      console.error("Failed to reach the Raspberry Pi.", error);
+    }
+  };
 
   const cancelListening = () => {
     setIsWaitingForPi(false)
@@ -110,7 +118,6 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
       <CardContent className="space-y-4">
         <div className="relative aspect-[4/3] bg-secondary rounded-lg overflow-hidden border border-border">
           
-          {/* 1. LIVE RASPBERRY PI VIEWFINDER */}
           {isWaitingForPi ? (
             <div className="absolute inset-0 bg-black flex flex-col">
               <img 
@@ -118,13 +125,21 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
                 alt="Live Pi Feed" 
                 className="w-full h-full object-cover"
               />
+
+
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 pb-12 mt-2">
+                <div className="w-[55%] max-w-[350px] aspect-[3/4] border-4 border-dashed border-white/60 rounded-[50%] flex items-center justify-center">
+                  <div className="w-2 h-2 bg-white/40 rounded-full"></div>
+                </div>
+
+              </div>
               
-              <div className="absolute bottom-4 inset-x-0 flex justify-center gap-4 z-20">
-                <Button size="lg" onClick={triggerCapture} className="rounded-full shadow-xl bg-blue-600 hover:bg-blue-700 text-white">
+              <div className=" absolute bottom-3 inset-x-0 flex justify-center gap-4 z-20">
+                <Button size="sm" onClick={triggerCapture} className="rounded-full shadow-xl bg-blue-600 hover:bg-blue-700 text-white">
                   <Camera className="h-5 w-5 mr-2" />
                   Capture & Analyze
                 </Button>
-                <Button variant="destructive" onClick={cancelListening} className="rounded-full shadow-xl">
+                <Button size="sm" variant="destructive" onClick={cancelListening} className="rounded-full shadow-xl">
                   Cancel
                 </Button>
               </div>
@@ -137,7 +152,6 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
             </div>
           ) : !imageLoaded ? (
             
-            /* 2. INITIAL CONNECT UI */
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
               <div className="p-4 rounded-full bg-primary/10">
                 <ImageIcon className="h-12 w-12 text-primary" />
@@ -157,7 +171,6 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
             </div>
           ) : (
             
-            /* 3. STATIC IMAGE + PI YOLOv8 RESULTS VIEW */
             <>
               {piScanImageUrl && (
                 <img 
@@ -169,24 +182,35 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
 
               {hasResults && showDetections && (
                 <div className="absolute inset-0">
-                  {filteredDetections.map((detection) => (
-                    <div
-                      key={detection.id}
-                      className="absolute border-2 rounded-sm"
-                      style={{
-                        left: `${(detection.x / 280) * 100}%`,
-                        top: `${(detection.y / 340) * 100}%`,
-                        width: `${(detection.width / 280) * 100}%`,
-                        height: `${(detection.height / 340) * 100}%`,
-                        borderColor: lesionColors[detection.type] || "#fff",
-                        backgroundColor: `${lesionColors[detection.type] || "#fff"}20`,
-                      }}
-                    >
-                      <span className="absolute -top-5 left-0 text-[10px] font-mono px-1 rounded shadow-sm" style={{ backgroundColor: lesionColors[detection.type] || "#fff", color: "#000" }}>
-                        {detection.type.charAt(0)} {Math.round(detection.confidence * 100)}%
-                      </span>
-                    </div>
-                  ))}
+
+                  {filteredDetections.map((detection) => {
+                    const scaleX = 1536; 
+                    const scaleY = 864;
+                      
+                    // DINAGDAG ANG RETURN DITO
+                    return (
+                      <div
+                        key={detection.id || Math.random().toString()}
+                        className="absolute border-2 rounded-sm"
+                        style={{
+                          // GINAMIT NA ANG scaleX AT scaleY DITO
+                          left: `${((detection.x - detection.width / 2) / scaleX) * 100}%`,
+                          top: `${((detection.y - detection.height / 2) / scaleY) * 100}%`,
+                          width: `${(detection.width / scaleX) * 100}%`,
+                          height: `${(detection.height / scaleY) * 100}%`,
+                          borderColor: lesionColors[detection.class] || "#fff",
+                          backgroundColor: `${lesionColors[detection.class] || "#fff"}20`,
+                        }}
+                      >
+                        <span 
+                          className="absolute -top-5 left-0 text-[10px] font-mono px-1 rounded shadow-sm whitespace-nowrap" 
+                          style={{ backgroundColor: lesionColors[detection.class] || "#fff", color: "#000" }}
+                        >
+                          {detection.class} {Math.round(detection.confidence * 100)}%
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 
@@ -200,7 +224,6 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset }:
           )}
         </div>
 
-        {/* Action Controls */}
         {imageLoaded && (
           <div className="flex flex-col gap-4">
              <div className="flex gap-2">
