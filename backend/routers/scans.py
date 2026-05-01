@@ -22,7 +22,6 @@ class ScanResponse(BaseModel):
 
 
 async def verify_patient(patient_id: str):
-    # Siguraduhin na ang patient_id ay hindi None
     if not patient_id:
         raise HTTPException(status_code=400, detail="Patient ID is required")
         

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
@@ -8,14 +8,13 @@ import { Badge } from "@/components/ui/badge"
 import { Upload, RotateCcw, Zap, Eye, EyeOff, Wifi, Image as ImageIcon, Camera } from "lucide-react"
 
 interface Detection {
-  id: string;      
+  id?: string;      
   class: string;   
   confidence: number;
   x: number;
   y: number;
   width: number;
   height: number;
-  
 }
 
 interface DetectionCanvasProps {
@@ -37,20 +36,19 @@ const lesionColors: Record<string, string> = {
 
 export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset, selectedPatientId }: DetectionCanvasProps) {
   const [showDetections, setShowDetections] = useState(true)
-  const [confidenceThreshold, setConfidenceThreshold] = useState([75])
+  const [confidenceThreshold, setConfidenceThreshold] = useState([50])
   const [imageLoaded, setImageLoaded] = useState(false)
   
-  // IoT States
+  const [imgSize, setImgSize] = useState({ width: 640, height: 640 })
+  
   const [isWaitingForPi, setIsWaitingForPi] = useState(false)
   const [piScanImageUrl, setPiScanImageUrl] = useState<string | null>(null)
   const [piDetections, setPiDetections] = useState<Detection[]>([])
 
-
-  const RASPBERRY_PI_IP = "192.168.1.13";
+  const RASPBERRY_PI_IP = "192.168.1.62";
   
-  const startListeningToPi = () => {
-    setIsWaitingForPi(true)
-  }
+  const startListeningToPi = () => setIsWaitingForPi(true)
+  const cancelListening = () => setIsWaitingForPi(false)
 
   const triggerCapture = async () => {
     if (!selectedPatientId) {
@@ -62,21 +60,13 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset, s
     onAnalyze(); 
 
     try {
-      // Ipadala ang selectedPatientId sa Pi via POST body
       const response = await fetch(`http://${RASPBERRY_PI_IP}:5000/capture`, { 
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          patient_id: selectedPatientId,
-          performed_by: "6835a666-4e55-46f4-a021-3945c557683d" // Halimbawa ng Admin/Clinician ID
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_id: selectedPatientId })
       });
 
       const data = await response.json();
-      console.log("RAW DATA FROM PI:", data);
-      console.log("ROBOFLOW PREDICTIONS:", data.predictions);
 
       if (data.status === "success") {
         setPiScanImageUrl(`${data.image_url}?t=${Date.now()}`);
@@ -87,10 +77,6 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset, s
       console.error("Failed to reach the Raspberry Pi.", error);
     }
   };
-
-  const cancelListening = () => {
-    setIsWaitingForPi(false)
-  }
 
   const handleReset = () => {
     setImageLoaded(false)
@@ -125,16 +111,7 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset, s
                 alt="Live Pi Feed" 
                 className="w-full h-full object-cover"
               />
-
-
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 pb-12 mt-2">
-                <div className="w-[55%] max-w-[350px] aspect-[3/4] border-4 border-dashed border-white/60 rounded-[50%] flex items-center justify-center">
-                  <div className="w-2 h-2 bg-white/40 rounded-full"></div>
-                </div>
-
-              </div>
-              
-              <div className=" absolute bottom-3 inset-x-0 flex justify-center gap-4 z-20">
+              <div className="absolute bottom-3 inset-x-0 flex justify-center gap-4 z-20">
                 <Button size="sm" onClick={triggerCapture} className="rounded-full shadow-xl bg-blue-600 hover:bg-blue-700 text-white">
                   <Camera className="h-5 w-5 mr-2" />
                   Capture & Analyze
@@ -143,76 +120,74 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset, s
                   Cancel
                 </Button>
               </div>
-              
-              <div className="absolute top-4 left-4 z-20">
-                <Badge className="bg-red-500 hover:bg-red-600 animate-pulse border-none text-white">
-                  <Wifi className="h-3 w-3 mr-1 inline" /> LIVE Pi FEED
-                </Badge>
-              </div>
             </div>
           ) : !imageLoaded ? (
-            
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4">
               <div className="p-4 rounded-full bg-primary/10">
                 <ImageIcon className="h-12 w-12 text-primary" />
               </div>
-              <div className="text-center px-4">
-                <p className="text-foreground font-medium">No scan loaded</p>
-                <p className="text-sm text-muted-foreground">
-                  Connect to the Raspberry Pi hardware to begin.
-                </p>
-              </div>
-              <div className="flex gap-2 mt-2">
-                <Button variant="default" onClick={startListeningToPi} className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg">
-                  <Wifi className="h-4 w-4 mr-2" />
-                  Connect to Pi Scanner
-                </Button>
-              </div>
+              <Button variant="default" onClick={startListeningToPi} className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg">
+                <Wifi className="h-4 w-4 mr-2" />
+                Connect to Pi Scanner
+              </Button>
             </div>
           ) : (
-            
             <>
-              {piScanImageUrl && (
-                <img 
-                  src={piScanImageUrl} 
-                  alt="Clinical Scan from Pi" 
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
-              )}
 
-              {hasResults && showDetections && (
-                <div className="absolute inset-0">
+              <div className="absolute inset-0 bg-black/90 flex items-center justify-center">
+                <div className="relative flex max-w-full max-h-full">
+                  
+                  {piScanImageUrl && (
+                    <img 
+                      src={piScanImageUrl} 
+                      alt="Clinical Scan from Pi" 
+                      className="max-w-full max-h-full object-contain block"
 
-                  {filteredDetections.map((detection) => {
-                    const scaleX = 1536; 
-                    const scaleY = 864;
-                      
-                    // DINAGDAG ANG RETURN DITO
-                    return (
-                      <div
-                        key={detection.id || Math.random().toString()}
-                        className="absolute border-2 rounded-sm"
-                        style={{
-                          // GINAMIT NA ANG scaleX AT scaleY DITO
-                          left: `${((detection.x - detection.width / 2) / scaleX) * 100}%`,
-                          top: `${((detection.y - detection.height / 2) / scaleY) * 100}%`,
-                          width: `${(detection.width / scaleX) * 100}%`,
-                          height: `${(detection.height / scaleY) * 100}%`,
-                          borderColor: lesionColors[detection.class] || "#fff",
-                          backgroundColor: `${lesionColors[detection.class] || "#fff"}20`,
-                        }}
-                      >
-                        <span 
-                          className="absolute -top-5 left-0 text-[10px] font-mono px-1 rounded shadow-sm whitespace-nowrap" 
-                          style={{ backgroundColor: lesionColors[detection.class] || "#fff", color: "#000" }}
-                        >
-                          {detection.class} {Math.round(detection.confidence * 100)}%
-                        </span>
-                      </div>
-                    );
-                  })}
+                      onLoad={(e) => {
+                        setImgSize({
+                          width: e.currentTarget.naturalWidth || 640,
+                          height: e.currentTarget.naturalHeight || 640
+                        });
+                      }}
+                    />
+                  )}
+
+                  {hasResults && showDetections && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {filteredDetections.map((detection) => {
+                        
+                        const boxLeftPercent = ((detection.x - (detection.width / 2)) / imgSize.width) * 100;
+                        const boxTopPercent = ((detection.y - (detection.height / 2)) / imgSize.height) * 100;
+                        const boxWidthPercent = (detection.width / imgSize.width) * 100;
+                        const boxHeightPercent = (detection.height / imgSize.height) * 100;
+
+                        return (
+                          <div
+                            key={detection.id || Math.random().toString()}
+                            className="absolute border-2 rounded-sm transition-all duration-200"
+                            style={{
+                              left: `${boxLeftPercent}%`,
+                              top: `${boxTopPercent}%`,
+                              width: `${boxWidthPercent}%`,
+                              height: `${boxHeightPercent}%`,
+                              borderColor: lesionColors[detection.class] || "#ef4444",
+                              backgroundColor: `${lesionColors[detection.class] || "#ef4444"}30`, // Medyo mas kita ang kulay
+                            }}
+                          >
+                            <span 
+                              className="absolute -top-6 left-0 text-[10px] font-mono px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap" 
+                              style={{ backgroundColor: lesionColors[detection.class] || "#ef4444", color: "#fff" }}
+                            >
+                              {detection.class} {Math.round(detection.confidence * 100)}%
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                 </div>
-              )}
+              </div>
 
               {isAnalyzing && (
                 <div className="absolute inset-0 bg-background/80 flex flex-col items-center justify-center gap-4 z-30 backdrop-blur-sm">
@@ -226,12 +201,10 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset, s
 
         {imageLoaded && (
           <div className="flex flex-col gap-4">
-             <div className="flex gap-2">
-                <Button className="flex-1" variant="outline" onClick={handleReset}>
-                  <RotateCcw className="h-4 w-4 mr-2" />
-                  Clear & Scan New Patient
-                </Button>
-             </div>
+             <Button className="w-full" variant="outline" onClick={handleReset}>
+               <RotateCcw className="h-4 w-4 mr-2" />
+               Clear & Scan New Patient
+             </Button>
              
              {hasResults && (
                 <div className="p-3 bg-secondary/50 rounded-md border border-border">
@@ -239,7 +212,7 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset, s
                       <span className="text-muted-foreground font-medium">Confidence Filter</span>
                       <span className="text-primary font-mono">{confidenceThreshold[0]}%</span>
                    </div>
-                   <Slider value={confidenceThreshold} onValueChange={setConfidenceThreshold} min={50} max={100} step={5} />
+                   <Slider value={confidenceThreshold} onValueChange={setConfidenceThreshold} min={10} max={100} step={5} />
                 </div>
              )}
           </div>

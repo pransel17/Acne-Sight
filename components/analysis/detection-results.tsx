@@ -2,7 +2,6 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { sampleDetections } from "@/lib/mock-data"
 import {
   Table,
   TableBody,
@@ -21,7 +20,13 @@ const lesionColors: Record<string, { bg: string; text: string; border: string }>
   PIH: { bg: "bg-violet-500/20", text: "text-violet-400", border: "border-violet-500/30" },
 }
 
-export function DetectionResults() {
+interface Detection {
+  class: string;
+  confidence: number;
+  region?: string;
+}
+
+export function DetectionResults({ detections }: { detections: Detection[] }) {
   return (
     <Card className="bg-card border-border">
       <CardHeader>
@@ -32,44 +37,54 @@ export function DetectionResults() {
         <Table>
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
-              <TableHead className="text-muted-foreground">ID</TableHead>
               <TableHead className="text-muted-foreground">Type</TableHead>
               <TableHead className="text-muted-foreground">Region</TableHead>
               <TableHead className="text-muted-foreground">Confidence</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sampleDetections.map((detection) => (
-              <TableRow key={detection.id} className="border-border hover:bg-secondary/50">
-                <TableCell className="font-mono text-sm text-muted-foreground">
-                  {detection.id.toUpperCase()}
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant="outline"
-                    className={`${lesionColors[detection.type]?.bg} ${lesionColors[detection.type]?.text} ${lesionColors[detection.type]?.border}`}
-                  >
-                    {detection.type}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-sm text-foreground">
-                  {detection.region}
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    <div className="w-16 h-2 bg-secondary rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary rounded-full"
-                        style={{ width: `${detection.confidence * 100}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-mono text-foreground">
-                      {Math.round(detection.confidence * 100)}%
-                    </span>
-                  </div>
+
+            {detections.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={3} className="text-center text-muted-foreground py-8">
+                  No lesions detected.
                 </TableCell>
               </TableRow>
-            ))}
+            ) : (
+              detections.map((detection, index) => {
+
+                const typeLabel = detection.class.charAt(0).toUpperCase() + detection.class.slice(1);
+                
+                return (
+                  <TableRow key={index} className="border-border hover:bg-secondary/50">
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={`${lesionColors[typeLabel]?.bg} ${lesionColors[typeLabel]?.text} ${lesionColors[typeLabel]?.border}`}
+                      >
+                        {typeLabel}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-foreground">
+                      {detection.region || "Face"}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="w-16 h-2 bg-secondary rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary rounded-full"
+                            style={{ width: `${detection.confidence * 100}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-mono text-foreground">
+                          {Math.round(detection.confidence * 100)}%
+                        </span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })
+            )}
           </TableBody>
         </Table>
       </CardContent>

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sql, generateScanNumber } from "@/lib/db"
-import { getCurrentUser, logAudit } from "@/lib/auth"
+import { getCurrentUser } from "@/lib/auth"
 
-// GET /api/scans - List all scans
 export async function GET(request: NextRequest) {
   try {
     const user = await getCurrentUser()
@@ -86,6 +85,9 @@ export async function POST(request: NextRequest) {
       patient_id,
       image_url,
       thumbnail_url,
+      predictions,  
+      severity_score, 
+      severity_level,
       original_filename,
       file_size,
       image_width,
@@ -101,30 +103,66 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify patient exists
+ 
     const patientCheck = await sql`SELECT id FROM patients WHERE id = ${patient_id} AND is_active = true`
     if (patientCheck.length === 0) {
       return NextResponse.json({ error: "Patient not found" }, { status: 404 })
     }
 
     const scan_number = generateScanNumber()
+ 
+const formattedSeverity = severity_level 
+  ? severity_level.toLowerCase().replace(" ", "_") 
+  : 'clear';
 
     const result = await sql`
       INSERT INTO scans (
-        patient_id, performed_by, scan_number, image_url, thumbnail_url,
-        original_filename, file_size, image_width, image_height,
-        status, confidence_threshold, notes
+        patient_id, 
+        performed_by, 
+        scan_number, 
+        image_url, 
+        status, 
+        severity_score, 
+        severity_level, 
+        confidence_threshold, 
+        notes
       ) VALUES (
-        ${patient_id}, ${user.id}, ${scan_number}, ${image_url}, ${thumbnail_url || null},
-        ${original_filename || null}, ${file_size || null}, ${image_width || null}, ${image_height || null},
-        'pending', ${confidence_threshold || 0.75}, ${notes || null}
+        ${patient_id}, 
+        ${user.id}, 
+        ${scan_number}, 
+        ${image_url}, 
+        'completed', 
+        ${severity_score || 0}, 
+        ${formattedSeverity},  -- Isang value lang dapat dito na naka-format na
+        ${confidence_threshold || 0.10}, 
+        ${notes || null}
       )
       RETURNING *
-    `
+    `;
+    const scan = result[0] // I-declare ulit ang 'scan' variable dito
+    const scanId = scan.id // Gagamitin pa rin natin ang id para sa lesion detections
 
-    const scan = result[0]
+    if (predictions && predictions.length > 0) {
+      for (const d of predictions) {
+        await sql`
+          INSERT INTO lesion_detections (
+            scan_id, lesion_type, confidence, 
+            bbox_x, bbox_y, bbox_width, bbox_height
+          ) VALUES (
+            ${scanId}, 
+            ${d.class.toLowerCase().replace(" ", "_")}, 
+            ${d.confidence}, 
+            ${Math.round(d.x)}, 
+            ${Math.round(d.y)}, 
+            ${Math.round(d.width)}, 
+            ${Math.round(d.height)}
+          )
+        `
+      }
+    }
 
-    await logAudit(user.id, "CREATE", "scan", scan.id, undefined, scan)
+   
+
 
     return NextResponse.json({ scan }, { status: 201 })
   } catch (error) {
