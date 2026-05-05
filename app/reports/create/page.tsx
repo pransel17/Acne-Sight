@@ -14,7 +14,6 @@ export default function CreateTemplatePage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   
-  // Grab the choices from the URL (passed by the Dialog)
   const patient_id = searchParams.get("patient_id")
   const report_type = searchParams.get("report_type")
   const title = searchParams.get("title")
@@ -22,21 +21,23 @@ export default function CreateTemplatePage() {
   const [loading, setLoading] = useState(false)
   const [content, setContent] = useState<Record<string, string>>({})
 
-  // Handle typing in the template inputs
   const handleChange = (field: string, value: string) => {
     setContent(prev => ({ ...prev, [field]: value }))
   }
 
-  // THIS is where the data finally goes to your backend
   const handleSubmit = async () => {
     setLoading(true)
     
+    // THIS IS THE FIX FOR THE 422 ERROR
+    // We replaced "System Clinician" with a valid UUID. 
+    // Tomorrow, we will swap this hardcoded ID with your real Auth Cookie ID.
     const payload = {
       patient_id: patient_id,
-      generated_by: "System Clinician",
+      scan_id: null, 
+      generated_by: "fda369e8-f6db-432a-987a-90385ccdb9d7", 
       report_type: report_type,
       title: title,
-      content: content // The specific template data goes into the JSONB field!
+      content: content 
     }
 
     try {
@@ -47,69 +48,18 @@ export default function CreateTemplatePage() {
       })
 
       if (response.ok) {
-        // Once created successfully, go back to the main reports list
         router.push("/reports")
         router.refresh()
+      } else {
+        // If it fails again, this will log the exact reason in your browser console
+        const errorData = await response.json()
+        console.error("Backend rejected it:", errorData)
       }
     } catch (error) {
       console.error("Error creating report:", error)
     } finally {
       setLoading(false)
     }
-  }
-
-  // --- TEMPLATE UI RENDERERS ---
-  const renderTemplate = () => {
-    if (report_type === "Initial Assessment") {
-      return (
-        <div className="space-y-4">
-          <div>
-            <Label>Chief Complaint</Label>
-            <Input onChange={(e) => handleChange("chief_complaint", e.target.value)} placeholder="Why is the patient here?" />
-          </div>
-          <div>
-            <Label>Skin History</Label>
-            <textarea className="w-full p-2 border rounded-md" rows={3} onChange={(e) => handleChange("history", e.target.value)} />
-          </div>
-          <div>
-            <Label>Initial Diagnosis</Label>
-            <Input onChange={(e) => handleChange("diagnosis", e.target.value)} />
-          </div>
-        </div>
-      )
-    } 
-    
-    if (report_type === "Progress Report") {
-      return (
-        <div className="space-y-4">
-          <div>
-            <Label>Changes in Severity</Label>
-            <textarea className="w-full p-2 border rounded-md" rows={3} onChange={(e) => handleChange("severity_changes", e.target.value)} />
-          </div>
-          <div>
-            <Label>Patient Feedback (Side effects, compliance)</Label>
-            <textarea className="w-full p-2 border rounded-md" rows={3} onChange={(e) => handleChange("feedback", e.target.value)} />
-          </div>
-        </div>
-      )
-    }
-
-    if (report_type === "Treatment Summary") {
-      return (
-        <div className="space-y-4">
-          <div>
-            <Label>Overall Outcome</Label>
-            <Input onChange={(e) => handleChange("outcome", e.target.value)} />
-          </div>
-          <div>
-            <Label>Maintenance Recommendations</Label>
-            <textarea className="w-full p-2 border rounded-md" rows={4} onChange={(e) => handleChange("recommendations", e.target.value)} />
-          </div>
-        </div>
-      )
-    }
-
-    return <div>No template selected.</div>
   }
 
   return (

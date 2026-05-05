@@ -22,7 +22,7 @@ export function AnalysisWorkspace() {
   const handleAnalyze = async () => {
     setIsAnalyzing(true)
     try {
-      const response = await fetch("http://192.168.1.62:5000/capture", { 
+      const response = await fetch("http://10.254.88.75:5000/capture", { 
         method: "POST",
       });
       const data = await response.json()

@@ -45,38 +45,43 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset, s
   const [piScanImageUrl, setPiScanImageUrl] = useState<string | null>(null)
   const [piDetections, setPiDetections] = useState<Detection[]>([])
 
-  const RASPBERRY_PI_IP = "192.168.1.62";
+  const RASPBERRY_PI_IP = "10.254.88.75";
   
   const startListeningToPi = () => setIsWaitingForPi(true)
   const cancelListening = () => setIsWaitingForPi(false)
 
   const triggerCapture = async () => {
-    if (!selectedPatientId) {
-      alert("Please select a patient first!");
-      return;
-    }
-
-    setIsWaitingForPi(false); 
-    onAnalyze(); 
-
-    try {
-      const response = await fetch(`http://${RASPBERRY_PI_IP}:5000/capture`, { 
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ patient_id: selectedPatientId })
-      });
-
-      const data = await response.json();
-
-      if (data.status === "success") {
-        setPiScanImageUrl(`${data.image_url}?t=${Date.now()}`);
-        setPiDetections(data.predictions);
-        setImageLoaded(true);
-      } 
-    } catch (error) {
-      console.error("Failed to reach the Raspberry Pi.", error);
-    }
-  };
+      if (!selectedPatientId) {
+        alert("Please select a patient first!");
+        return;
+      }
+    
+      setIsWaitingForPi(false); 
+      onAnalyze(); 
+    
+      try {
+        const response = await fetch(`http://${RASPBERRY_PI_IP}:5000/capture`, { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ patient_id: selectedPatientId })
+        });
+      
+        const data = await response.json();
+      
+        if (data.status === "success") {
+          // THE FIX: We force the URL to use port 5000 so it doesn't get refused!
+          const imagePath = data.image_url.startsWith('http') 
+              ? new URL(data.image_url).pathname 
+              : data.image_url;
+              
+          setPiScanImageUrl(`http://${RASPBERRY_PI_IP}:5000${imagePath}?t=${Date.now()}`);
+          setPiDetections(data.predictions);
+          setImageLoaded(true);
+        } 
+      } catch (error) {
+        console.error("Failed to reach the Raspberry Pi.", error);
+      }
+    };
 
   const handleReset = () => {
     setImageLoaded(false)
@@ -111,6 +116,16 @@ export function DetectionCanvas({ isAnalyzing, hasResults, onAnalyze, onReset, s
                 alt="Live Pi Feed" 
                 className="w-full h-full object-cover"
               />
+
+              {/* FACE ALIGNMENT OVERLAY */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-10 pb-12 mt-2">
+                <div className="w-[55%] max-w-[350px] aspect-[3/4] border-4 border-dashed border-white/60 rounded-[50%] flex items-center justify-center">
+                  <div className="w-2 h-2 bg-white/40 rounded-full"></div>
+                </div>
+              </div>
+
+
+
               <div className="absolute bottom-3 inset-x-0 flex justify-center gap-4 z-20">
                 <Button size="sm" onClick={triggerCapture} className="rounded-full shadow-xl bg-blue-600 hover:bg-blue-700 text-white">
                   <Camera className="h-5 w-5 mr-2" />
